@@ -34,34 +34,44 @@ public class AuthenticationFilter extends UsernamePasswordAuthenticationFilter {
         super.setAuthenticationManager(authenticationManager);
     }
 
-
     @Override
-    public Authentication attemptAuthentication(HttpServletRequest request, HttpServletResponse response) throws AuthenticationException {
+    public Authentication attemptAuthentication(HttpServletRequest req,
+                                                HttpServletResponse res) throws AuthenticationException {
         try {
-            LoginUserRequest creds = new ObjectMapper().readValue(request.getInputStream(), LoginUserRequest.class);
-            return getAuthenticationManager().authenticate(new UsernamePasswordAuthenticationToken(creds.getEmail(), creds.getPassword(), new ArrayList<>()));
+
+            LoginUserRequest creds = new ObjectMapper()
+                    .readValue(req.getInputStream(), LoginUserRequest.class);
+
+            return getAuthenticationManager().authenticate(
+                    new UsernamePasswordAuthenticationToken(
+                            creds.getEmail(),
+                            creds.getPassword(),
+                            new ArrayList<>())
+            );
 
         } catch (IOException e) {
-            System.out.println(e);
+            throw new RuntimeException(e);
         }
-        return null;
     }
 
     @Override
-    protected void successfulAuthentication(HttpServletRequest request, HttpServletResponse response, FilterChain chain, Authentication authResult) throws IOException, ServletException {
-//        String signingKeyB64= Base64.getEncoder().encodeToString("signingKey".getBytes(StandardCharsets.UTF_8));
-
-        String userName = ((User) authResult.getPrincipal()).getUsername();
+    protected void successfulAuthentication(HttpServletRequest req,
+                                            HttpServletResponse res,
+                                            FilterChain chain,
+                                            Authentication auth) throws IOException, ServletException {
+        String userName = ((User) auth.getPrincipal()).getUsername();
         UserDto userDetails = userService.getUserDetailsByEmail(userName);
 
-        String token = Jwts.builder().setSubject(userDetails.getUserId())
+        String token = Jwts.builder()
+                .setSubject(userDetails.getUserId())
                 .setExpiration(new Date(System.currentTimeMillis() + Long.parseLong(environment.getProperty("token.expiration_time"))))
-                .signWith(SignatureAlgorithm.HS256, environment.getProperty("token.secret"))
+                .signWith(SignatureAlgorithm.HS512, environment.getProperty("token.secret") )
                 .compact();
 
-        response.addHeader("token", token);
-        response.addHeader("userId", userDetails.getUserId());
+        res.addHeader("token", token);
+        res.addHeader("userId", userDetails.getUserId());
     }
+
 
 
 }
